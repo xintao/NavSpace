@@ -1,0 +1,70 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using ESRI.ArcGIS.SpatialAnalyst;
+using ESRI.ArcGIS.GeoAnalyst;
+using ESRI.ArcGIS.Geodatabase;
+using System.IO;
+using ESRI.ArcGIS.DataSourcesRaster;
+using ESRI.ArcGIS.DataSourcesFile;
+using System.Windows.Forms;
+
+namespace VDGen
+{
+
+
+    class Voronoi
+    {
+        private IFeatureClass m_SourceFeatCls;
+        private double m_Cellsize;
+	private string tmpPath = "c:\\tempraster";
+
+        public Voronoi(IFeatureClass pFCls, double pCellsize)
+        {
+            m_SourceFeatCls = pFCls;
+            m_Cellsize = pCellsize;
+        }
+
+        public IFeatureClass getVoroRegoin(string tmpRasterPath, string tmpShpPath)
+        {
+            IDistanceOp pDistanceOp = new RasterDistanceOpClass();
+            IRasterAnalysisEnvironment pRasterEnv = pDistanceOp as IRasterAnalysisEnvironment;
+
+            IWorkspaceFactory pWSF = new RasterWorkspaceFactory();
+            
+            if (!Directory.Exists(tmpRasterPath)) Directory.CreateDirectory(tmpRasterPath);
+            IWorkspace pWS = pWSF.OpenFromFile(tmpRasterPath, 0);
+            pRasterEnv.OutWorkspace = pWS;
+
+            IGeoDataset pGeoDS = m_SourceFeatCls as IGeoDataset;
+            object cellsize = m_Cellsize; //Math.Min(1.0, pGeoDS.Extent.Width / 1000.0);//pGeoDS.Extent.Width / 1000;
+            pRasterEnv.SetCellSize(esriRasterEnvSettingEnum.esriRasterEnvValue, ref cellsize);
+            //object extprov = pGeoDS.Extent;
+            //pRasterEnv.SetExtent(esriRasterEnvSettingEnum.esriRasterEnvValue, ref extprov, );
+            //pRasterEnv.Mask = pGeoDSMask
+
+            object oMaxDist = Math.Max(pGeoDS.Extent.Width, pGeoDS.Extent.Height);// cellsize; //pGeoDS.Extent.XMax - pGeoDS.Extent.XMin;
+            object oValue = 0.0;
+            IGeoDataset resultGeoDs = null;
+            try
+            {
+                IGeoDataset pOutGeoDs = pDistanceOp.EucAllocation(pGeoDS, ref oMaxDist, ref oValue);
+                IConversionOp pConvOp = new ESRI.ArcGIS.GeoAnalyst.RasterConversionOp() as IConversionOp;
+
+                IWorkspaceFactory outWSF = new ShapefileWorkspaceFactoryClass();               
+                if (!Directory.Exists(tmpShpPath)) Directory.CreateDirectory(tmpShpPath);                
+                IWorkspace outWS = outWSF.OpenFromFile(tmpShpPath, 0);
+
+                resultGeoDs = pConvOp.RasterDataToPolygonFeatureData(pOutGeoDs, outWS, "tmpvoropolygon", true);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.ToString(), "MedialAxesGen");
+            }
+
+            return resultGeoDs as IFeatureClass;
+        }
+
+       
+    }
+}
